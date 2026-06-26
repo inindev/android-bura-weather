@@ -17,10 +17,15 @@ import com.davidtakac.bura.places.Place
 
 class DeletePlace(
     private val savedPlacesRepository: SavedPlacesRepository,
-    private val forecastCacher: ForecastCacher
+    private val forecastCacher: ForecastCacher,
+    // Notifies observers (e.g. home-screen widgets) that the saved-places set changed, so a widget
+    // pinned to the removed place re-resolves to another saved place (or the empty state) instead of
+    // showing stale data until its next periodic tick. No-op by default to keep this use case decoupled.
+    private val onPlacesChanged: suspend () -> Unit = {}
 ) {
     suspend operator fun invoke(place: Place) {
         savedPlacesRepository.deletePlace(place)
         forecastCacher.delete(place.location.coordinates)
+        onPlacesChanged()
     }
 }

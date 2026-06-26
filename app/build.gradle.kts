@@ -21,9 +21,9 @@ android {
 
     defaultConfig {
         applicationId = "com.davidtakac.bura"
-        minSdk = 28
-        versionCode = 18
-        versionName = "1.8.1"
+        minSdk = 35
+        versionCode = 19
+        versionName = "1.9.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // This is deprecated, but the alternative (androidResources.localeFilters) is incubating
@@ -78,6 +78,7 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.material3)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.ui.tooling.preview)
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)

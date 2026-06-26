@@ -40,6 +40,19 @@ Other features include:
 - Material Design 3 / Material You
 - Dark and light theme
 - Customizable measurement units
+- Resizable home screen widget with clock, current conditions, and 5-day forecast
+
+## Widget
+A resizable home screen widget (5x4 by default) shows the time, date, current conditions, and a 5-day forecast for one of your saved places. Each widget instance is independent — tap the place name to cycle through your saved places, so you can keep widgets for several locations side by side.
+
+Tap shortcuts:
+- **Weather icon** — open the app's overview for that place
+- **A forecast day** — open that day's graphs
+- **Clock** — open the system clock/alarms
+- **Date** — open your calendar
+- **↻** — refresh now
+
+The widget refreshes in the background about once an hour, with a few minutes of random jitter each cycle so installs don't all hit the data provider at the same instant. The rest of its surface is non-interactive, so taps outside these targets do nothing.
 
 ## Will be implemented
 Sorted by priority:
@@ -56,7 +69,7 @@ Sorted by priority:
    1. Home screen tiles
    2. Graphs
 3. Weather alerts
-4. Home screen widgets
+4. ~~Home screen widgets~~
 5. Notification widgets
 6. Customizable [Open-Meteo data sources](https://open-meteo.com/en/docs#data-sources)
 

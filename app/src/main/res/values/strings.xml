@@ -20,6 +20,31 @@
     <string name="general_btn_dialog_confirm">OK</string>
     <string name="general_btn_dialog_cancel">Cancel</string>
 
+    <string name="widget_label">Weather &amp; Clock</string>
+    <string name="widget_description">Time, current conditions, and a 5-day forecast.</string>
+    <string name="widget_refresh">Refresh</string>
+    <string name="widget_placeholder_location">—</string>
+    <string name="widget_placeholder_high_low">—/—°</string>
+    <string name="widget_placeholder_date">—</string>
+    <string name="widget_placeholder_alarm">—</string>
+    <string name="widget_placeholder_humidity">Humidity: —</string>
+    <string name="widget_placeholder_uv">UV Index: —</string>
+    <string name="widget_placeholder_pressure">Pressure: —</string>
+    <string name="widget_placeholder_temp">—°</string>
+    <string name="widget_placeholder_feels_like">Feels Like: —°</string>
+    <string name="widget_placeholder_condition">—</string>
+    <string name="widget_placeholder_day">—</string>
+    <string name="widget_placeholder_wind">Wind: —</string>
+    <string name="widget_placeholder_updated">—</string>
+    <string name="widget_humidity">Humidity: %1$s</string>
+    <string name="widget_uv_index">UV Index: %1$s</string>
+    <string name="widget_pressure">Pressure: %1$s</string>
+    <string name="widget_feels_like">Feels Like: %1$s</string>
+    <string name="widget_wind">Wind: %1$s</string>
+    <string name="widget_high_low">%1$s/%2$s</string>
+    <string name="widget_no_place">Open Bura to add a place</string>
+    <string name="widget_no_data">Weather unavailable</string>
+
     <string name="credit_weather">Weather data by Open-Meteo.com</string>
     <string name="credit_geocoding">Geocoding data by Open-Meteo.com</string>
 

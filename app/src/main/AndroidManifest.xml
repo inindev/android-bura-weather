@@ -15,6 +15,23 @@
 
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Required to launch the system clock via ACTION_SHOW_ALARMS (e.g. Samsung Clock). -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+
+    <!--
+      Package visibility (Android 11+): the widget fires implicit intents at other apps
+      (the system clock and a calendar). Without these <queries>, those intents silently
+      fail to resolve under our app's identity, even though the targets exist.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.SHOW_ALARMS" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.APP_CALENDAR" />
+        </intent>
+    </queries>
 
     <application
         android:name=".App"
@@ -36,6 +53,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".widget.WeatherWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/weather_widget_info" />
+        </receiver>
     </application>
 
 </manifest>

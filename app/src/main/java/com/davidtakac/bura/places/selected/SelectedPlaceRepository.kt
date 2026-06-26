@@ -27,6 +27,10 @@ class SelectedPlaceRepository(
     suspend fun selectPlace(place: Place) =
         prefs.edit { putString(SELECTED_PLACE_KEY, place.location.coordinates.id) }
 
+    /** Synchronous select by coordinates (used by the widget before the app composes). */
+    fun selectPlaceImmediate(coords: Coordinates) =
+        prefs.edit(commit = true) { putString(SELECTED_PLACE_KEY, coords.id) }
+
     suspend fun getSelectedPlace(): Place? {
         val coords = prefs.getString(SELECTED_PLACE_KEY, null)?.let(Coordinates::fromId) ?: return null
         return savedPlacesRepository.getSavedPlace(coords)

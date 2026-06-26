@@ -48,10 +48,10 @@ class ForecastRepository(
         }?.convertTo(units)
 
     private fun shouldUpdate(timestamp: Instant, updatePolicy: UpdatePolicy): Boolean =
-        if (updatePolicy == UpdatePolicy.Static) {
-            false
-        } else {
-            Duration.between(
+        when (updatePolicy) {
+            UpdatePolicy.Static -> false
+            UpdatePolicy.Force -> true
+            else -> Duration.between(
                 timestamp,
                 Instant.now()
             ) >= Duration.ofHours(if (updatePolicy == UpdatePolicy.Eager) 1 else 6)
@@ -59,5 +59,5 @@ class ForecastRepository(
 }
 
 enum class UpdatePolicy {
-    Eager, Frugal, Static
+    Eager, Frugal, Static, Force
 }

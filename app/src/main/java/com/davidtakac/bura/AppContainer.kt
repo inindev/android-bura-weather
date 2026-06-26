@@ -29,6 +29,7 @@ import com.davidtakac.bura.places.selected.SelectedPlaceRepository
 import com.davidtakac.bura.unexpectederror.UnexpectedErrorConsumer
 import com.davidtakac.bura.unexpectederror.UnexpectedErrorRepository
 import com.davidtakac.bura.unexpectederror.UnexpectedErrorSetter
+import com.davidtakac.bura.widget.WidgetUpdater
 
 class AppContainer(private val appContext: Context) {
     val prefs: SharedPreferences get() = appContext.getSharedPreferences("prefs", Context.MODE_PRIVATE)
@@ -56,9 +57,14 @@ class AppContainer(private val appContext: Context) {
     val selectedPlaceRepo by lazy { SelectedPlaceRepository(prefs, savedPlacesRepo) }
     val selectedUnitsRepo by lazy { SelectedUnitsRepository(prefs) }
 
-    private val savedPlacesRepo by lazy { SavedPlacesRepository(root) }
+    val savedPlacesRepo by lazy { SavedPlacesRepository(root) }
     val getSavedPlaces get() = GetSavedPlaces(selectedUnitsRepo, selectedPlaceRepo, savedPlacesRepo, forecastRepo)
     val searchPlaces get() = SearchPlaces(userAgent)
-    val selectPlace get() = SelectPlace(selectedPlaceRepo, savedPlacesRepo)
-    val deletePlace get() = DeletePlace(savedPlacesRepo, forecastCacher)
+    val selectPlace get() = SelectPlace(selectedPlaceRepo, savedPlacesRepo, ::notifyWidgets)
+    val deletePlace get() = DeletePlace(savedPlacesRepo, forecastCacher, ::notifyWidgets)
+
+    /** Re-render every widget instance after the saved-places set changes. */
+    private suspend fun notifyWidgets() {
+        WidgetUpdater.updateAll(appContext)
+    }
 }

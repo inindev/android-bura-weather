@@ -31,8 +31,13 @@ import com.davidtakac.bura.unexpectederror.UnexpectedErrorViewModel
 import java.time.LocalDate
 
 @Composable
-fun AppNavHost(theme: Theme, onThemeClick: (Theme) -> Unit) {
+fun AppNavHost(theme: Theme, onThemeClick: (Theme) -> Unit, widgetRoute: String? = null) {
     val controller = rememberNavController()
+
+    // Deep link from a widget tap (e.g. graphs for a specific day). Navigate once.
+    LaunchedEffect(widgetRoute) {
+        if (widgetRoute != null) controller.navigate(widgetRoute)
+    }
     val unexpectedErrorVM = viewModel<UnexpectedErrorViewModel>(factory = UnexpectedErrorViewModel.Factory)
     val unexpectedErrorState = unexpectedErrorVM.state.collectAsStateWithLifecycle().value
     LaunchedEffect(unexpectedErrorState) {

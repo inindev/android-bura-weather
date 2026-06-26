@@ -69,7 +69,7 @@ fun Condition.image(context: Context, appIcons: AppIcons): Int =
         else -> throw IllegalStateException("Unknown WMO Code: $wmoCode.")
     }
 
-private fun Condition.string(context: Context): String = context.getString(
+fun Condition.string(context: Context): String = context.getString(
     when (wmoCode) {
         0 -> R.string.wmo_0
         1 -> R.string.wmo_1

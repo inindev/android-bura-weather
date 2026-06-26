@@ -17,10 +17,15 @@ import com.davidtakac.bura.places.saved.SavedPlacesRepository
 
 class SelectPlace(
     private val selectedPlaceRepository: SelectedPlaceRepository,
-    private val savedPlacesRepository: SavedPlacesRepository
+    private val savedPlacesRepository: SavedPlacesRepository,
+    // Notifies observers (e.g. home-screen widgets) that the saved-places set changed, so a widget
+    // added before any place existed can resolve the new place immediately instead of staying on
+    // "add a place" until its next periodic tick. No-op by default to keep this use case decoupled.
+    private val onPlacesChanged: suspend () -> Unit = {}
 ) {
     suspend operator fun invoke(place: Place) {
         selectedPlaceRepository.selectPlace(place)
         savedPlacesRepository.savePlace(place)
+        onPlacesChanged()
     }
 }

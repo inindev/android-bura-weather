@@ -1,0 +1,33 @@
+<!--
+  ~ Copyright 2026 John Clark
+  ~
+  ~ This file is part of Bura.
+  ~
+  ~ Bura is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+  ~
+  ~ Bura is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+  ~
+  ~ You should have received a copy of the GNU General Public License along with Bura. If not, see <https://www.gnu.org/licenses/>.
+  -->
+
+<!--
+  5x4 home-screen widget. Refresh is driven by the framework's updatePeriodMillis: it fires
+  onUpdate on the cadence below, and defers ticks that fall due while the device is in Doze,
+  delivering them when the device next wakes rather than waking it. The widget therefore stays idle
+  while the device sleeps and refreshes on wake. 30 minutes is the platform minimum; smaller values
+  are clamped to it. onUpdate runs the fetch off the broadcast thread (see WeatherWidgetProvider),
+  so network work never risks an ANR.
+-->
+<!-- 1800000 ms = 30 min -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/widget_weather"
+    android:minHeight="276dp"
+    android:minWidth="349dp"
+    android:previewImage="@mipmap/ic_launcher"
+    android:previewLayout="@layout/widget_weather"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="4"
+    android:targetCellWidth="5"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />

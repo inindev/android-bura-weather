@@ -9,3 +9,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Local Gradle daemon JVM criteria (vendor/JDK specific to the local machine)
+/gradle/gradle-daemon-jvm.properties
