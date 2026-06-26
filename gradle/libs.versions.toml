@@ -1,11 +1,11 @@
 [versions]
-agp = "9.1.1"
+agp = "9.2.1"
 appCompat = "1.7.1"
-composeBom = "2026.05.01"
-coreKtx = "1.18.0"
-json = "20251224"
+composeBom = "2026.06.00"
+coreKtx = "1.19.0"
+json = "20260522"
 junit = "4.13.2"
-kotlin = "2.3.21"
+kotlin = "2.4.0"
 kotlinxCoroutinesTest = "1.11.0"
 navigationCompose = "2.9.8"
 
