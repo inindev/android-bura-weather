@@ -30,14 +30,14 @@ data class Units(
 ) {
     companion object {
         val Default get() = Units(
-            temperature = Temperature.Unit.DegreesCelsius,
-            rain = Precipitation.Unit.Millimeters,
-            showers = Precipitation.Unit.Millimeters,
-            snow = Precipitation.Unit.Centimeters,
-            precipitation = Precipitation.Unit.Millimeters,
-            windSpeed = WindSpeed.Unit.MetersPerSecond,
-            pressure = Pressure.Unit.Hectopascal,
-            visibility = Visibility.Unit.Kilometers
+            temperature = Temperature.Unit.DegreesFahrenheit,
+            rain = Precipitation.Unit.Inches,
+            showers = Precipitation.Unit.Inches,
+            snow = Precipitation.Unit.Inches,
+            precipitation = Precipitation.Unit.Inches,
+            windSpeed = WindSpeed.Unit.MilesPerHour,
+            pressure = Pressure.Unit.InchesOfMercury,
+            visibility = Visibility.Unit.Miles
         )
     }
 }
