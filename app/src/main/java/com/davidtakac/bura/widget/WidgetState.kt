@@ -38,6 +38,9 @@ sealed interface WidgetState {
         val pressure: String,
         val wind: String,
         val updated: String,
+        // True when the last refresh failed and this is the last-known cached forecast. The [updated]
+        // time still reflects the last successful download; this only drives the "couldn't refresh" cue.
+        val stale: Boolean,
         val days: List<Day>
     ) : WidgetState {
         data class Day(

@@ -25,6 +25,9 @@ import com.davidtakac.bura.R
 
 /** Pure mapping from [WidgetState] to a [RemoteViews] for the widget layout. */
 object WidgetRenderer {
+    // Muted amber for the "couldn't refresh" timestamp — legible on the dark widget without shouting.
+    private val STALE_COLOR = 0xFFE6B800.toInt()
+
     private val dayLabelIds = intArrayOf(
         R.id.widget_day1_label, R.id.widget_day2_label, R.id.widget_day3_label,
         R.id.widget_day4_label, R.id.widget_day5_label
@@ -59,7 +62,7 @@ object WidgetRenderer {
                 views.setTextViewText(R.id.widget_location, context.getString(R.string.widget_no_data))
 
             is WidgetState.Loaded -> {
-                bindLoaded(views, state)
+                bindLoaded(context, views, state)
                 // Tap the location name to cycle to the next saved place.
                 views.setOnClickPendingIntent(R.id.widget_location, togglePlaceIntent(context, appWidgetId))
                 // Clock -> system alarm app; date -> calendar.
@@ -195,7 +198,7 @@ object WidgetRenderer {
         )
     }
 
-    private fun bindLoaded(views: RemoteViews, state: WidgetState.Loaded) {
+    private fun bindLoaded(context: Context, views: RemoteViews, state: WidgetState.Loaded) {
         views.setTextViewText(R.id.widget_location, state.location)
         views.setTextViewText(R.id.widget_today_high_low, state.todayHighLow)
         views.setTextViewText(R.id.widget_date, state.date)
@@ -214,7 +217,18 @@ object WidgetRenderer {
         views.setTextViewText(R.id.widget_uv, state.uvIndex)
         views.setTextViewText(R.id.widget_pressure, state.pressure)
         views.setTextViewText(R.id.widget_wind, state.wind)
-        views.setTextViewText(R.id.widget_updated, state.updated)
+        // On a failed refresh the timestamp intentionally does not advance; mark it so the stale time
+        // reads as "couldn't refresh" rather than looking current. A fresh RemoteViews is built each
+        // render, so the fresh branch inherits the layout's default color without an explicit reset.
+        if (state.stale) {
+            views.setTextViewText(
+                R.id.widget_updated,
+                context.getString(R.string.widget_updated_stale, state.updated)
+            )
+            views.setTextColor(R.id.widget_updated, STALE_COLOR)
+        } else {
+            views.setTextViewText(R.id.widget_updated, state.updated)
+        }
 
         for (i in dayLabelIds.indices) {
             val day = state.days.getOrNull(i)

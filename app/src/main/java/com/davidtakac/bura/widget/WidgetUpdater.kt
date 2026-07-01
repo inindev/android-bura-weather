@@ -43,6 +43,23 @@ object WidgetUpdater {
         appWidgetManager.updateAppWidget(appWidgetId, WidgetRenderer.render(context, state, appWidgetId))
     }
 
+    /**
+     * Repaints a widget from cached data only (never hits the network) and pushes it. Used to clear a
+     * refresh spinner deterministically when a refresh is cut short by its deadline or an error: the
+     * spinner lives in the launcher's host process and animates until something re-renders, so without
+     * this it would spin until the next periodic tick. [forceStale] marks the result as not-current
+     * (the just-failed refresh) even though the cache read itself does not attempt a download.
+     */
+    suspend fun render(context: Context, appWidgetId: Int, forceStale: Boolean = false) {
+        val container = (context.applicationContext as App).container
+        var state = getWidgetState(context, container)(
+            context, Instant.now(), appWidgetId, UpdatePolicy.Static
+        )
+        if (forceStale && state is WidgetState.Loaded) state = state.copy(stale = true)
+        AppWidgetManager.getInstance(context)
+            .updateAppWidget(appWidgetId, WidgetRenderer.render(context, state, appWidgetId))
+    }
+
     private suspend fun advancePlace(context: Context, container: AppContainer, appWidgetId: Int) {
         val places = container.savedPlacesRepo.getSavedPlaces()
         if (places.isEmpty()) return

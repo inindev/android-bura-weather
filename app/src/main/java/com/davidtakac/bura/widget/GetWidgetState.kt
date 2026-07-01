@@ -14,6 +14,7 @@ package com.davidtakac.bura.widget
 
 import android.content.Context
 import com.davidtakac.bura.forecast.ForecastRepository
+import com.davidtakac.bura.forecast.ForecastResult
 import com.davidtakac.bura.forecast.UpdatePolicy
 import com.davidtakac.bura.forecast.parameters.condition.image
 import com.davidtakac.bura.forecast.parameters.condition.string
@@ -65,7 +66,13 @@ class GetWidgetState(
 
         val units = selectedUnitsRepo.getSelectedUnits()
         val coords = place.location.coordinates
-        val forecast = forecastRepo.get(coords, units, updatePolicy) ?: return WidgetState.NoData
+        val result = forecastRepo.getResult(coords, units, updatePolicy)
+        val forecast = when (result) {
+            is ForecastResult.Fresh -> result.forecast
+            is ForecastResult.Stale -> result.forecast
+            ForecastResult.None -> return WidgetState.NoData
+        }
+        val stale = result is ForecastResult.Stale
 
         val zone = place.location.timeZone
         val nowDateTime = now.atZone(zone).toLocalDateTime()
@@ -123,6 +130,7 @@ class GetWidgetState(
                 wind?.widgetString(context, nf) ?: "—"
             ),
             updated = forecast.timestamp.atZone(zone).format(updatedFormatter),
+            stale = stale,
             days = daily.days.take(5).map { day ->
                 WidgetState.Loaded.Day(
                     label = day.time.dayOfWeek

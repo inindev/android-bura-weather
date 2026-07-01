@@ -25,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Broadcast entry point for the widget. Data work (network included) runs off the broadcast thread
@@ -63,12 +64,23 @@ class WeatherWidgetProvider : AppWidgetProvider() {
             ACTION_REFRESH -> withWidgetId(intent) { id ->
                 showSpinner(context, id)
                 runAsync {
-                    // Hold the spinner briefly so it animates at least once.
-                    delay(MIN_SPIN_MS)
-                    WidgetUpdater.update(
-                        context, AppWidgetManager.getInstance(context),
-                        id, advancePlace = false, updatePolicy = UpdatePolicy.Force
-                    )
+                    var completed = false
+                    try {
+                        withTimeoutOrNull(REFRESH_DEADLINE_MS) {
+                            // Hold the spinner briefly so it animates at least once before the result.
+                            delay(MIN_SPIN_MS)
+                            WidgetUpdater.update(
+                                context, AppWidgetManager.getInstance(context),
+                                id, advancePlace = false, updatePolicy = UpdatePolicy.Force
+                            )
+                            completed = true
+                        }
+                    } finally {
+                        // On success, update() already repainted (clearing the spinner). If it was cut
+                        // short by the deadline or an error, repaint from cache — flagged stale — so the
+                        // spinner never outlives the refresh and hangs until the next periodic tick.
+                        if (!completed) WidgetUpdater.render(context, id, forceStale = true)
+                    }
                 }
             }
 
@@ -124,6 +136,11 @@ class WeatherWidgetProvider : AppWidgetProvider() {
 
         // Hold the manual-refresh spinner long enough to animate at least once.
         private const val MIN_SPIN_MS = 800L
+
+        // Bound a manual refresh (spin hold + fetch) so the spinner is cleared promptly even if the
+        // network stalls past the downloader's own timeouts. Kept under ASYNC_TIMEOUT_MS so this
+        // governs, and the finally-repaint still runs inside the outer cap.
+        private const val REFRESH_DEADLINE_MS = 8_000L
 
         // Cap the async fetch so the broadcast always finishes well inside the ANR window.
         private const val ASYNC_TIMEOUT_MS = 9_000L

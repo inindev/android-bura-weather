@@ -31,21 +31,45 @@ class ForecastRepository(
         coords: Coordinates,
         units: Units,
         updatePolicy: UpdatePolicy = UpdatePolicy.Eager
-    ): Forecast? =
+    ): Forecast? = when (val result = getResult(coords, units, updatePolicy)) {
+        is ForecastResult.Fresh -> result.forecast
+        is ForecastResult.Stale -> result.forecast
+        ForecastResult.None -> null
+    }
+
+    /**
+     * Like [get], but reports whether the forecast is [ForecastResult.Fresh] (served from the network,
+     * or from a cache still within its freshness window) or [ForecastResult.Stale] (the network fetch
+     * failed and the last cached forecast is served instead). Callers that show an "up to date" vs
+     * "couldn't refresh" cue use this. The forecast's [Forecast.timestamp] is set only on a successful
+     * download, so a stale result carries the last-success time — the displayed update time never
+     * advances on a failed refresh.
+     */
+    suspend fun getResult(
+        coords: Coordinates,
+        units: Units,
+        updatePolicy: UpdatePolicy = UpdatePolicy.Eager
+    ): ForecastResult =
         coordsToMutex.getOrPut(coords, defaultValue = { Mutex() }).withLock {
             val cached = cacher.get(coords)
             if (cached == null || shouldUpdate(cached.timestamp, updatePolicy)) {
                 val downloaded = downloader.get(coords)
                 if (downloaded == null) {
-                    cached
+                    if (cached != null) ForecastResult.Stale(cached) else ForecastResult.None
                 } else {
                     cacher.save(coords, downloaded)
-                    downloaded
+                    ForecastResult.Fresh(downloaded)
                 }
             } else {
-                cached
+                ForecastResult.Fresh(cached)
             }
-        }?.convertTo(units)
+        }.convertTo(units)
+
+    private fun ForecastResult.convertTo(units: Units): ForecastResult = when (this) {
+        is ForecastResult.Fresh -> ForecastResult.Fresh(forecast.convertTo(units))
+        is ForecastResult.Stale -> ForecastResult.Stale(forecast.convertTo(units))
+        ForecastResult.None -> ForecastResult.None
+    }
 
     private fun shouldUpdate(timestamp: Instant, updatePolicy: UpdatePolicy): Boolean =
         when (updatePolicy) {
@@ -60,4 +84,11 @@ class ForecastRepository(
 
 enum class UpdatePolicy {
     Eager, Frugal, Static, Force
+}
+
+/** Outcome of a forecast request: fresh data, stale cache after a failed fetch, or nothing at all. */
+sealed interface ForecastResult {
+    data class Fresh(val forecast: Forecast) : ForecastResult
+    data class Stale(val forecast: Forecast) : ForecastResult
+    data object None : ForecastResult
 }

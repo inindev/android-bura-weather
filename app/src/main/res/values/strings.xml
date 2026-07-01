@@ -44,6 +44,7 @@
     <string name="widget_high_low">%1$s/%2$s</string>
     <string name="widget_no_place">Open Bura to add a place</string>
     <string name="widget_no_data">Weather unavailable</string>
+    <string name="widget_updated_stale">⚠ %1$s</string>
 
     <string name="credit_weather">Weather data by Open-Meteo.com</string>
     <string name="credit_geocoding">Geocoding data by Open-Meteo.com</string>

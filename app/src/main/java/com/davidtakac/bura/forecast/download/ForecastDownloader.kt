@@ -15,6 +15,7 @@ package com.davidtakac.bura.forecast.download
 import com.davidtakac.bura.forecast.Forecast
 import com.davidtakac.bura.places.Coordinates
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.job
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -22,6 +23,7 @@ import java.io.InputStreamReader
 import java.net.URL
 import java.util.Locale
 import javax.net.ssl.HttpsURLConnection
+import kotlin.coroutines.coroutineContext
 
 class ForecastDownloader(private val userAgent: String) {
     suspend fun get(coords: Coordinates): Forecast? =
@@ -38,10 +40,20 @@ class ForecastDownloader(private val userAgent: String) {
                 return@withContext null
             }
 
+            // HttpsURLConnection's connect/read are uninterruptible blocking calls, so a coroutine
+            // timeout (e.g. the widget's refresh deadline) cannot cancel them on its own. Closing the
+            // connection when the job is cancelled unblocks the blocked thread promptly instead of
+            // letting it run to its full connect/read timeout. (Note: name resolution happens before a
+            // socket exists and is not covered by connectTimeout or by this — that path still falls
+            // back to the OS resolver's own timeout.)
+            val cancelHandle = coroutineContext.job.invokeOnCompletion {
+                runCatching { conn.disconnect() }
+            }
+
             try {
                 conn.requestMethod = "GET"
-                conn.connectTimeout = 10_000
-                conn.readTimeout = 10_000
+                conn.connectTimeout = CONNECT_TIMEOUT_MS
+                conn.readTimeout = READ_TIMEOUT_MS
                 conn.setRequestProperty("User-Agent", userAgent)
                 if (conn.responseCode != 200) return@withContext null
                 val jsonString =
@@ -50,6 +62,7 @@ class ForecastDownloader(private val userAgent: String) {
             } catch (_: Exception) {
                 null
             } finally {
+                cancelHandle.dispose()
                 conn.disconnect()
             }
         }
@@ -67,4 +80,12 @@ class ForecastDownloader(private val userAgent: String) {
 
     private fun formatCoordinate(value: Double): String =
         String.format(Locale.ROOT, "%.2f", value)
+
+    private companion object {
+        // Kept short so a single failed attempt resolves well inside the widget's refresh deadline
+        // (see WeatherWidgetProvider.REFRESH_DEADLINE_MS) rather than holding a spinner for tens of
+        // seconds. Open-Meteo responds in well under a second on a healthy connection.
+        const val CONNECT_TIMEOUT_MS = 6_000
+        const val READ_TIMEOUT_MS = 6_000
+    }
 }
