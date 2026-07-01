@@ -12,10 +12,12 @@
 
 package com.davidtakac.bura.widget
 
+import android.app.KeyguardManager
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
+import android.os.PowerManager
 import android.view.View
 import android.widget.RemoteViews
 import com.davidtakac.bura.R
@@ -29,14 +31,19 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Broadcast entry point for the widget. Data work (network included) runs off the broadcast thread
- * via [runAsync] (goAsync plus a coroutine) so it cannot block long enough to ANR. The periodic and
- * on-wake refresh cadence is owned by the framework through updatePeriodMillis (see
- * res/xml/weather_widget_info.xml).
+ * via [runAsync] (goAsync plus a coroutine) so it cannot block long enough to ANR.
+ *
+ * The periodic cadence is driven by [WidgetAlarmScheduler]: a self-rescheduling one-shot alarm that
+ * fires [ACTION_TICK], which we re-arm on each tick. The framework's own updatePeriodMillis (see
+ * res/xml/weather_widget_info.xml) is kept only as a backstop — its inexact repeating alarm is
+ * deferred indefinitely by App Standby/Doze on modern builds, so it cannot be relied on to refresh
+ * the widget on its own.
  *
  * Updates intentionally avoid WorkManager. Enqueuing a one-time job toggles WorkManager's
  * RescheduleReceiver component, and on some platforms that component change is broadcast as
  * PACKAGE_CHANGED, which the AppWidget framework surfaces as another onUpdate — re-enqueuing work
  * and spinning a tight update loop. Running the fetch directly via goAsync avoids that side effect.
+ * AlarmManager has no such component-toggle side effect.
  */
 class WeatherWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(
@@ -46,12 +53,48 @@ class WeatherWidgetProvider : AppWidgetProvider() {
     ) {
         // Fired by the framework on the updatePeriodMillis cadence — including the deferred tick
         // delivered when the device wakes from Doze — as well as on widget add and app update.
-        runAsync { WidgetUpdater.updateAll(context, UpdatePolicy.Eager) }
+        //
+        // Only fetch when someone can actually see the widget: screen on and unlocked. Otherwise
+        // repaint from cache (no network) — the clock self-ticks regardless. Because a tick that falls
+        // due in Doze is delivered on the next wake, this tends to refresh right as the user returns.
+        val policy = if (isUserPresent(context)) UpdatePolicy.Wake else UpdatePolicy.Static
+        runAsync { WidgetUpdater.updateAll(context, policy) }
+        // onUpdate fires on add and app-update (and any framework backstop tick); (re-)arm the alarm
+        // chain here so it recovers if it was ever lost (e.g. an app update clears pending alarms).
+        WidgetAlarmScheduler.schedule(context)
+    }
+
+    override fun onEnabled(context: Context) {
+        // First widget instance added — start the refresh chain.
+        WidgetAlarmScheduler.schedule(context)
+    }
+
+    override fun onDisabled(context: Context) {
+        // Last widget instance removed — stop refreshing.
+        WidgetAlarmScheduler.cancel(context)
+    }
+
+    /** True when the screen is on and the device is unlocked — a reliable proxy for "user is present". */
+    private fun isUserPresent(context: Context): Boolean {
+        val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val keyguard = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+        return power.isInteractive && !keyguard.isKeyguardLocked
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         when (intent.action) {
+            ACTION_TICK -> {
+                // Chain the next tick first, so a slow or failing fetch can never break the cadence.
+                WidgetAlarmScheduler.schedule(context)
+                // Fetch on every tick regardless of presence — the alarm is exact + RTC_WAKEUP, so it
+                // fires on cadence even with the screen off, and Wake already no-ops the network unless
+                // the cache is older than 30 min. Gating on presence here (the old behaviour) meant data
+                // only refreshed when a tick happened to coincide with the user looking, which let the
+                // widget fall hours behind. The fetch runs off the broadcast thread via runAsync.
+                runAsync { WidgetUpdater.updateAll(context, UpdatePolicy.Wake) }
+            }
+
             ACTION_TOGGLE_PLACE -> withWidgetId(intent) { id ->
                 runAsync {
                     WidgetUpdater.update(
@@ -130,6 +173,7 @@ class WeatherWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
+        const val ACTION_TICK = "com.davidtakac.bura.widget.ACTION_TICK"
         const val ACTION_TOGGLE_PLACE = "com.davidtakac.bura.widget.ACTION_TOGGLE_PLACE"
         const val ACTION_REFRESH = "com.davidtakac.bura.widget.ACTION_REFRESH"
         const val ACTION_NOOP = "com.davidtakac.bura.widget.ACTION_NOOP"

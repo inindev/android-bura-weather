@@ -28,6 +28,11 @@ object WidgetRenderer {
     // Muted amber for the "couldn't refresh" timestamp — legible on the dark widget without shouting.
     private val STALE_COLOR = 0xFFE6B800.toInt()
 
+    // Must match the widget_updated textColor in widget_weather.xml. Launchers recycle the widget's
+    // view hierarchy when the layout id is unchanged (RemoteViews.reapply), so a setTextColor from an
+    // earlier stale render survives later renders — the fresh branch has to reset it explicitly.
+    private val UPDATED_DEFAULT_COLOR = 0xFFCCCCCC.toInt()
+
     private val dayLabelIds = intArrayOf(
         R.id.widget_day1_label, R.id.widget_day2_label, R.id.widget_day3_label,
         R.id.widget_day4_label, R.id.widget_day5_label
@@ -218,8 +223,9 @@ object WidgetRenderer {
         views.setTextViewText(R.id.widget_pressure, state.pressure)
         views.setTextViewText(R.id.widget_wind, state.wind)
         // On a failed refresh the timestamp intentionally does not advance; mark it so the stale time
-        // reads as "couldn't refresh" rather than looking current. A fresh RemoteViews is built each
-        // render, so the fresh branch inherits the layout's default color without an explicit reset.
+        // reads as "couldn't refresh" rather than looking current. Both branches set the color: the
+        // launcher recycles the view hierarchy across renders, so the stale color must be reset
+        // explicitly or it outlives the ⚠ once a refresh succeeds.
         if (state.stale) {
             views.setTextViewText(
                 R.id.widget_updated,
@@ -228,6 +234,7 @@ object WidgetRenderer {
             views.setTextColor(R.id.widget_updated, STALE_COLOR)
         } else {
             views.setTextViewText(R.id.widget_updated, state.updated)
+            views.setTextColor(R.id.widget_updated, UPDATED_DEFAULT_COLOR)
         }
 
         for (i in dayLabelIds.indices) {

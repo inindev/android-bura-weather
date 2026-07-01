@@ -11,12 +11,13 @@
   -->
 
 <!--
-  5x4 home-screen widget. Refresh is driven by the framework's updatePeriodMillis: it fires
-  onUpdate on the cadence below, and defers ticks that fall due while the device is in Doze,
-  delivering them when the device next wakes rather than waking it. The widget therefore stays idle
-  while the device sleeps and refreshes on wake. 30 minutes is the platform minimum; smaller values
-  are clamped to it. onUpdate runs the fetch off the broadcast thread (see WeatherWidgetProvider),
-  so network work never risks an ANR.
+  5x4 home-screen widget. The primary refresh cadence is driven by WidgetAlarmScheduler (a
+  self-rescheduling allow-while-idle AlarmManager chain), NOT by updatePeriodMillis: the framework's
+  inexact repeating alarm is deferred indefinitely by App Standby/Doze on modern builds, so it
+  cannot refresh the widget on its own. updatePeriodMillis is retained only as a backstop and to
+  re-arm the alarm chain via onUpdate; 30 minutes matches the alarm interval (and is the platform
+  minimum — smaller values are clamped to it). onUpdate runs the fetch off the broadcast thread (see
+  WeatherWidgetProvider), so network work never risks an ANR.
 -->
 <!-- 1800000 ms = 30 min -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"

@@ -75,14 +75,17 @@ class ForecastRepository(
         when (updatePolicy) {
             UpdatePolicy.Static -> false
             UpdatePolicy.Force -> true
-            else -> Duration.between(
-                timestamp,
-                Instant.now()
-            ) >= Duration.ofHours(if (updatePolicy == UpdatePolicy.Eager) 1 else 6)
+            else -> Duration.between(timestamp, Instant.now()) >= when (updatePolicy) {
+                UpdatePolicy.Wake -> Duration.ofMinutes(30)
+                UpdatePolicy.Eager -> Duration.ofHours(1)
+                else -> Duration.ofHours(6)
+            }
         }
 }
 
 enum class UpdatePolicy {
+    /** Refresh if the cache is older than 30 min. Used by the widget's presence-gated wake refresh. */
+    Wake,
     Eager, Frugal, Static, Force
 }
 

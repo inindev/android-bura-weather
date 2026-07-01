@@ -15,8 +15,20 @@
 
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Required to launch the system clock via ACTION_SHOW_ALARMS (e.g. Samsung Clock). -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+
+    <!-- Re-arm the widget refresh alarm after a reboot (alarms don't survive one). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+      Fire the widget refresh tick on an exact allow-while-idle alarm so it holds its cadence in
+      Doze instead of drifting hours late. USE_EXACT_ALARM (API 33+) is auto-granted at install;
+      minSdk is 35, so no SCHEDULE_EXACT_ALARM fallback is needed. Bura is not on Play Store, so
+      its exact-alarm-use policy does not apply.
+    -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <!--
       Package visibility (Android 11+): the widget fires implicit intents at other apps
@@ -64,6 +76,17 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/weather_widget_info" />
         </receiver>
+
+        <!-- Re-arms the widget refresh alarm on boot. Exported so the system can deliver
+             BOOT_COMPLETED; it only re-schedules the alarm and ignores other actions. -->
+        <receiver
+            android:name=".widget.WidgetBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>
