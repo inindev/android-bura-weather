@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -45,11 +46,21 @@ fun TemperatureGraphSummary(state: TemperatureGraphSummary, modifier: Modifier =
         temperature = {
             when (now) {
                 null -> {
+                    // Shrink only the font size, not the line height: the icon is sized to the row's
+                    // (text-driven) line box, so keeping the full line height leaves the icon unchanged
+                    // while the high/low glyphs render smaller.
+                    val reducedSize = LocalTextStyle.current.fontSize * 0.8f
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(state.maxTemp.string())
+                        Text(state.maxTemp.string(), fontSize = reducedSize)
+                        Text(
+                            text = "/",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = reducedSize
+                        )
                         Text(
                             text = state.minTemp.string(),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = reducedSize
                         )
                     }
                 }

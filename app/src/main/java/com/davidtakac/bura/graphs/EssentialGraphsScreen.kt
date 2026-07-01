@@ -37,6 +37,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.davidtakac.bura.R
@@ -60,15 +61,30 @@ fun EssentialGraphsScreen(
     onSelectPlaceClick: () -> Unit,
     onBackClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // Shareable only once the forecast has loaded; the button is disabled otherwise.
+    val summaries = (state as? EssentialGraphsState.Success)?.tempGraphSummaries
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.cond_screen_title)) },
+                title = { Text(stringResource(R.string.forecast_screen_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
                             painter = painterResource(id = R.drawable.arrow_back),
                             contentDescription = null
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { summaries?.let { scope.launch { shareForecastImage(context, it) } } },
+                        enabled = summaries != null
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.share),
+                            contentDescription = stringResource(R.string.forecast_share)
                         )
                     }
                 }
@@ -124,7 +140,7 @@ private fun Pager(
         val pagerPage by remember { derivedStateOf { pagerState.currentPage } }
         val scope = rememberCoroutineScope()
         GraphsPagerIndicator(
-            state = dates,
+            state = summaries,
             selected = pagerPage,
             onClick = {
                 scope.launch {

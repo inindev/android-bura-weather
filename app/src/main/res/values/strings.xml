@@ -59,6 +59,8 @@
     <string name="delete_place_description">This will also delete its cached forecast data.</string>
 
     <string name="cond_screen_title">Conditions</string>
+    <string name="forecast_screen_title">Forecast</string>
+    <string name="forecast_share">Share forecast</string>
     <string name="cond_screen_pop">Chance of Precipitation</string>
     <string name="cond_screen_precip">Precipitation Totals</string>
     <string name="cond_screen_temp_unit_celsius">Celsius (°C)</string>

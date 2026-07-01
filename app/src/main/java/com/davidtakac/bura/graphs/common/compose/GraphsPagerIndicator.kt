@@ -12,14 +12,17 @@
 
 package com.davidtakac.bura.graphs.common.compose
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +38,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.davidtakac.bura.R
+import com.davidtakac.bura.forecast.parameters.condition.Condition
+import com.davidtakac.bura.forecast.parameters.condition.image
+import com.davidtakac.bura.forecast.parameters.condition.string
+import com.davidtakac.bura.forecast.parameters.temperature.Temperature
+import com.davidtakac.bura.forecast.parameters.temperature.string
+import com.davidtakac.bura.graphs.temperature.TemperatureGraphSummary
 import com.davidtakac.bura.theme.AppTheme
 import com.davidtakac.bura.common.util.capitalize
 import com.davidtakac.bura.common.compose.rememberAppLocale
@@ -44,21 +53,39 @@ import java.time.LocalDate
 
 @Composable
 fun GraphsPagerIndicator(
-    state: List<LocalDate>,
+    state: List<TemperatureGraphSummary>,
     selected: Int,
     onClick: (date: LocalDate) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val formatter = rememberDateTimeFormatter(ofPattern = R.string.date_time_pattern_dow)
+    val locale = rememberAppLocale()
+    val numberFormat = rememberNumberFormat()
     ScrollableTabRow(selectedTabIndex = selected, modifier = modifier) {
-        state.forEachIndexed { idx, date ->
+        state.forEachIndexed { idx, summary ->
+            val dayOfWeek = formatter.format(summary.day).capitalize(locale)
+            val dayOfMonth = numberFormat.format(summary.day.dayOfMonth)
             Tab(
                 selected = idx == selected,
-                onClick = { onClick(date) },
-                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                text = { Text(formatter.format(date).capitalize(rememberAppLocale())) },
-                icon = { Text(text = rememberNumberFormat().format(date.dayOfMonth)) }
-            )
+                onClick = { onClick(summary.day) },
+                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    // e.g. "Wed 1", then the condition icon, then the day's high/low.
+                    Text("$dayOfWeek $dayOfMonth")
+                    Image(
+                        painter = summary.condition.image(),
+                        contentDescription = summary.condition.string(),
+                        modifier = Modifier
+                            .padding(vertical = 4.dp)
+                            .size(28.dp)
+                    )
+                    Text("${summary.maxTemp.string()}/${summary.minTemp.string()}")
+                }
+            }
         }
     }
 }
@@ -104,14 +131,15 @@ fun GraphsPagerIndicatorSkeleton(
 private fun GraphsPagerIndicatorPreview() {
     AppTheme {
         GraphsPagerIndicator(
-            state = listOf(
-                LocalDate.parse("1970-01-01"),
-                LocalDate.parse("1970-01-02"),
-                LocalDate.parse("1970-01-03"),
-                LocalDate.parse("1970-01-04"),
-                LocalDate.parse("1970-01-05"),
-                LocalDate.parse("1970-01-06")
-            ),
+            state = (1..6).map { day ->
+                TemperatureGraphSummary(
+                    day = LocalDate.parse("1970-01-0$day"),
+                    minTemp = Temperature(10.0, Temperature.Unit.DegreesCelsius),
+                    maxTemp = Temperature(30.0, Temperature.Unit.DegreesCelsius),
+                    condition = Condition(wmoCode = 53, isDay = true),
+                    now = null
+                )
+            },
             selected = 2,
             onClick = {},
             modifier = Modifier.fillMaxWidth()
