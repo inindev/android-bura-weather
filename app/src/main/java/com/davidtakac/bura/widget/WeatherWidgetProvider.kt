@@ -18,14 +18,18 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
+import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
 import com.davidtakac.bura.R
 import com.davidtakac.bura.forecast.UpdatePolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -107,23 +111,43 @@ class WeatherWidgetProvider : AppWidgetProvider() {
             ACTION_REFRESH -> withWidgetId(intent) { id ->
                 showSpinner(context, id)
                 runAsync {
-                    var completed = false
-                    try {
-                        withTimeoutOrNull(REFRESH_DEADLINE_MS) {
-                            // Hold the spinner briefly so it animates at least once before the result.
-                            delay(MIN_SPIN_MS)
-                            WidgetUpdater.update(
-                                context, AppWidgetManager.getInstance(context),
-                                id, advancePlace = false, updatePolicy = UpdatePolicy.Force
-                            )
-                            completed = true
-                        }
-                    } finally {
-                        // On success, update() already repainted (clearing the spinner). If it was cut
-                        // short by the deadline or an error, repaint from cache — flagged stale — so the
-                        // spinner never outlives the refresh and hangs until the next periodic tick.
-                        if (!completed) WidgetUpdater.render(context, id, forceStale = true)
+                    // The forced refresh can block on an uninterruptible native call -- most
+                    // importantly DNS resolution, which happens before any socket exists and which no
+                    // coroutine timeout or connection.disconnect() can preempt (see ForecastDownloader).
+                    // If we awaited it inline, withTimeout could not actually interrupt it: a timeout
+                    // only fires at a suspension point, and a thread stuck in blocking DNS never reaches
+                    // one until the OS resolver gives up (~12s observed). That overran the
+                    // foreground-broadcast ANR window (~10s): the system killed the process, and the
+                    // killed coroutine never ran the repaint below, so the launcher's spinner animated
+                    // forever.
+                    //
+                    // So run the fetch as a detached sibling job and wait on join() -- a real suspension
+                    // point the deadline CAN interrupt. On timeout we abandon it (its blocked thread
+                    // dies on its own when DNS finally returns) and repaint from cache, so the spinner
+                    // always clears well inside the ANR window regardless of how long DNS hangs.
+                    val fetch = refreshScope.launch {
+                        WidgetUpdater.update(
+                            context, AppWidgetManager.getInstance(context),
+                            id, advancePlace = false, updatePolicy = UpdatePolicy.Force
+                        )
                     }
+                    // Hold the spinner briefly so it animates at least once before the result.
+                    delay(MIN_SPIN_MS)
+                    // Deadline covers the whole refresh; discount the spin we already held.
+                    val completed =
+                        withTimeoutOrNull(REFRESH_DEADLINE_MS - MIN_SPIN_MS) { fetch.join() } != null
+                    if (!completed) {
+                        // Abandon the still-blocked fetch and repaint from cache -- flagged stale -- so
+                        // the spinner never outlives the refresh and hangs until the next periodic tick.
+                        // NonCancellable so the outer ASYNC_TIMEOUT_MS can't cancel this render at its
+                        // first suspension point and leave the spinner up. The render is cache-only
+                        // (Static never downloads or takes the download lock), so it is small and bounded.
+                        fetch.cancel()
+                        withContext(NonCancellable) {
+                            WidgetUpdater.render(context, id, forceStale = true)
+                        }
+                    }
+                    // On success, update() already repainted (clearing the spinner) inside the deadline.
                 }
             }
 
@@ -147,8 +171,9 @@ class WeatherWidgetProvider : AppWidgetProvider() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 withTimeout(ASYNC_TIMEOUT_MS) { block() }
-            } catch (_: Throwable) {
-                // Swallow: don't crash the broadcast on a fetch/timeout failure.
+            } catch (t: Throwable) {
+                // Log but don't crash the broadcast on a fetch/timeout failure.
+                Log.w(TAG, "widget update failed", t)
             } finally {
                 pending.finish()
             }
@@ -173,6 +198,14 @@ class WeatherWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
+        private const val TAG = "WeatherWidget"
+
+        // Refresh fetches run here rather than as children of the goAsync coroutine, so a fetch that
+        // blocks on an uninterruptible native call (e.g. DNS) can be abandoned by the refresh deadline
+        // without holding up PendingResult.finish(). SupervisorJob so one failed fetch never cancels
+        // the scope; the leaked job ends on its own once the blocking call returns.
+        private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
         const val ACTION_TICK = "com.davidtakac.bura.widget.ACTION_TICK"
         const val ACTION_TOGGLE_PLACE = "com.davidtakac.bura.widget.ACTION_TOGGLE_PLACE"
         const val ACTION_REFRESH = "com.davidtakac.bura.widget.ACTION_REFRESH"

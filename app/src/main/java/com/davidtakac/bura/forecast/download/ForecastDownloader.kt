@@ -12,10 +12,12 @@
 
 package com.davidtakac.bura.forecast.download
 
+import android.util.Log
 import com.davidtakac.bura.forecast.Forecast
 import com.davidtakac.bura.places.Coordinates
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.job
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -23,7 +25,6 @@ import java.io.InputStreamReader
 import java.net.URL
 import java.util.Locale
 import javax.net.ssl.HttpsURLConnection
-import kotlin.coroutines.coroutineContext
 
 class ForecastDownloader(private val userAgent: String) {
     suspend fun get(coords: Coordinates): Forecast? =
@@ -41,13 +42,20 @@ class ForecastDownloader(private val userAgent: String) {
             }
 
             // HttpsURLConnection's connect/read are uninterruptible blocking calls, so a coroutine
-            // timeout (e.g. the widget's refresh deadline) cannot cancel them on its own. Closing the
-            // connection when the job is cancelled unblocks the blocked thread promptly instead of
-            // letting it run to its full connect/read timeout. (Note: name resolution happens before a
-            // socket exists and is not covered by connectTimeout or by this — that path still falls
-            // back to the OS resolver's own timeout.)
-            val cancelHandle = coroutineContext.job.invokeOnCompletion {
-                runCatching { conn.disconnect() }
+            // timeout (e.g. the widget's refresh deadline) cannot cancel them on its own. The watcher
+            // suspends until this scope is cancelled and then closes the connection, unblocking the
+            // blocked thread promptly instead of letting it run to its full connect/read timeout.
+            // A plain invokeOnCompletion cannot do this: it fires only when the job *completes*, and
+            // the job cannot complete while the thread is still blocked -- which is exactly when the
+            // disconnect is needed. (Note: name resolution happens before a socket exists and is not
+            // covered by connectTimeout or by this -- that path still falls back to the OS resolver's
+            // own timeout.)
+            val watcher = launch {
+                try {
+                    awaitCancellation()
+                } finally {
+                    runCatching { conn.disconnect() }
+                }
             }
 
             try {
@@ -55,14 +63,18 @@ class ForecastDownloader(private val userAgent: String) {
                 conn.connectTimeout = CONNECT_TIMEOUT_MS
                 conn.readTimeout = READ_TIMEOUT_MS
                 conn.setRequestProperty("User-Agent", userAgent)
-                if (conn.responseCode != 200) return@withContext null
+                if (conn.responseCode != 200) {
+                    Log.w(TAG, "forecast download for ${coords.id} got HTTP ${conn.responseCode}")
+                    return@withContext null
+                }
                 val jsonString =
                     BufferedReader(InputStreamReader(conn.inputStream)).use(BufferedReader::readText)
                 JSONObject(jsonString)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.w(TAG, "forecast download failed for ${coords.id}", e)
                 null
             } finally {
-                cancelHandle.dispose()
+                watcher.cancel()
                 conn.disconnect()
             }
         }
@@ -82,6 +94,8 @@ class ForecastDownloader(private val userAgent: String) {
         String.format(Locale.ROOT, "%.2f", value)
 
     private companion object {
+        const val TAG = "ForecastDownloader"
+
         // Kept short so a single failed attempt resolves well inside the widget's refresh deadline
         // (see WeatherWidgetProvider.REFRESH_DEADLINE_MS) rather than holding a spinner for tens of
         // seconds. Open-Meteo responds in well under a second on a healthy connection.

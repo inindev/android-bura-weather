@@ -20,12 +20,16 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 
 class ForecastRepository(
     private val cacher: ForecastCacher,
     private val downloader: ForecastDownloader
 ) {
-    private val coordsToMutex = mutableMapOf<Coordinates, Mutex>()
+    // Callers race here from the main thread (view models) and IO threads (widget broadcasts), so
+    // the map must be concurrent: a plain getOrPut can hand two callers different mutexes for the
+    // same coords, silently losing the mutual exclusion the mutex exists to provide.
+    private val coordsToMutex = ConcurrentHashMap<Coordinates, Mutex>()
 
     suspend fun get(
         coords: Coordinates,
@@ -49,21 +53,36 @@ class ForecastRepository(
         coords: Coordinates,
         units: Units,
         updatePolicy: UpdatePolicy = UpdatePolicy.Eager
-    ): ForecastResult =
-        coordsToMutex.getOrPut(coords, defaultValue = { Mutex() }).withLock {
-            val cached = cacher.get(coords)
-            if (cached == null || shouldUpdate(cached.timestamp, updatePolicy)) {
+    ): ForecastResult {
+        // Cache reads are lock-free: only the download-and-save below is serialized per coords.
+        // Locking the whole method (the old shape) made even Static repaints queue behind an
+        // in-flight network fetch for the same place, so a hung download blocked the cache-only
+        // path that exists to repaint the widget when a fetch runs long.
+        val cached = cacher.get(coords)
+        if (updatePolicy == UpdatePolicy.Static) {
+            return (cached?.let { ForecastResult.Fresh(it) } ?: ForecastResult.None)
+                .convertTo(units)
+        }
+        if (cached != null && !shouldUpdate(cached.timestamp, updatePolicy)) {
+            return ForecastResult.Fresh(cached).convertTo(units)
+        }
+        return coordsToMutex.computeIfAbsent(coords) { Mutex() }.withLock {
+            // Re-check freshness: another caller may have refreshed while we waited on the lock,
+            // in which case its result is reused instead of downloading again.
+            val current = cacher.get(coords)
+            if (current != null && !shouldUpdate(current.timestamp, updatePolicy)) {
+                ForecastResult.Fresh(current)
+            } else {
                 val downloaded = downloader.get(coords)
                 if (downloaded == null) {
-                    if (cached != null) ForecastResult.Stale(cached) else ForecastResult.None
+                    if (current != null) ForecastResult.Stale(current) else ForecastResult.None
                 } else {
                     cacher.save(coords, downloaded)
                     ForecastResult.Fresh(downloaded)
                 }
-            } else {
-                ForecastResult.Fresh(cached)
             }
         }.convertTo(units)
+    }
 
     private fun ForecastResult.convertTo(units: Units): ForecastResult = when (this) {
         is ForecastResult.Fresh -> ForecastResult.Fresh(forecast.convertTo(units))
@@ -86,7 +105,15 @@ class ForecastRepository(
 enum class UpdatePolicy {
     /** Refresh if the cache is older than 30 min. Used by the widget's presence-gated wake refresh. */
     Wake,
-    Eager, Frugal, Static, Force
+    Eager, Frugal,
+
+    /**
+     * Strictly cache-only: never downloads and never waits on an in-flight download, even when
+     * nothing is cached. The widget uses this to repaint deterministically (e.g. to clear the
+     * refresh spinner) while a fetch may be stuck.
+     */
+    Static,
+    Force
 }
 
 /** Outcome of a forecast request: fresh data, stale cache after a failed fetch, or nothing at all. */

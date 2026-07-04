@@ -15,34 +15,46 @@ package com.davidtakac.bura.forecast.cache
 import com.davidtakac.bura.common.util.getStringOrNull
 import com.davidtakac.bura.forecast.Forecast
 import com.davidtakac.bura.places.Coordinates
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 class ForecastCacher(
     private val root: File,
     private val appVersionName: String,
 ) {
-    private val coordsToData = mutableMapOf<Coordinates, Forecast?>()
+    // Read and written from the main thread (view models) and IO threads (widget broadcasts).
+    private val coordsToData = ConcurrentHashMap<Coordinates, Forecast>()
 
     suspend fun get(coords: Coordinates): Forecast? {
-        val fromMemory = coordsToData[coords]
-        if (fromMemory != null) return fromMemory
+        coordsToData[coords]?.let { return it }
 
-        val fromFile = findForecastFile(coords)
-            ?.let { fileToForecast(it) }
-            ?: return null
+        val file = findForecastFile(coords) ?: return null
+        val fromFile = fileToForecast(file)
+        if (fromFile == null) {
+            // Corrupt or incompatible cache file. Delete it so it can't fail every future
+            // read -- before this, one torn file made all updates for the place throw forever.
+            withContext(Dispatchers.IO) { file.delete() }
+            return null
+        }
         coordsToData[coords] = fromFile
 
         return fromFile
     }
 
     suspend fun save(coords: Coordinates, data: Forecast) {
-        val file = findForecastFile(coords) ?: File(getDir(), coords.id)
         val jsonString = forecastToJsonString(data)
+        val dir = getDir()
         withContext(Dispatchers.IO) {
-            file.writeText(jsonString)
+            // Write-then-rename so the cache file is replaced atomically: a plain writeText
+            // leaves torn JSON behind if the process dies (or another writer interleaves)
+            // mid-write.
+            val tmp = File(dir, "${coords.id}.tmp")
+            tmp.writeText(jsonString)
+            tmp.renameTo(File(dir, coords.id))
         }
         coordsToData[coords] = data
     }
@@ -60,17 +72,22 @@ class ForecastCacher(
             getDir().listFiles()
         }?.firstOrNull { it.name == coords.id }
 
-    private suspend fun fileToForecast(file: File): Forecast? {
+    /** Null when the file is unparseable (torn write, schema drift), not just version-mismatched. */
+    private suspend fun fileToForecast(file: File): Forecast? = try {
         val json = JSONObject(
             withContext(Dispatchers.IO) {
                 file.readText()
             }
         )
-        return if (json.getStringOrNull(CacheJsonSerialNames.APP_VERSION_NAME) == null) {
+        if (json.getStringOrNull(CacheJsonSerialNames.APP_VERSION_NAME) == null) {
             null
         } else {
             convertCacheJsonToForecast(json)
         }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        null
     }
 
     private suspend fun forecastToJsonString(data: Forecast): String =
